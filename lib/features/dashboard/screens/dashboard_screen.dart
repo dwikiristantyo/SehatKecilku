@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../auth/screens/login_screen.dart';
 import 'add_child_screen.dart';
 import 'child_detail_screen.dart';
+import 'profile_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -65,6 +66,36 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  // Fungsi helper untuk menghitung usia anak secara otomatis
+  String _calculateAge(String? birthDateStr) {
+    if (birthDateStr == null || birthDateStr.isEmpty) return 'Usia tidak diketahui';
+    
+    try {
+      DateTime birthDate = DateTime.parse(birthDateStr);
+      DateTime today = DateTime.now();
+
+      int years = today.year - birthDate.year;
+      int months = today.month - birthDate.month;
+
+      if (today.day < birthDate.day) {
+        months--;
+      }
+
+      if (months < 0) {
+        years--;
+        months += 12;
+      }
+
+      if (years > 0) {
+        return '$years Tahun ${months > 0 ? '$months Bulan' : ''}';
+      } else {
+        return '$months Bulan';
+      }
+    } catch (e) {
+      return 'Format tanggal salah';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -73,6 +104,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
         backgroundColor: const Color(0xFF2A9D8F),
         foregroundColor: Colors.white,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.person),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ProfileScreen()),
+              );
+            },
+            tooltip: 'Profil',
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: _handleLogout,
@@ -180,31 +221,48 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               return Card(
                                 margin: const EdgeInsets.only(bottom: 12),
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.circular(16),
                                 ),
                                 child: ListTile(
+                                  contentPadding: const EdgeInsets.all(16),
                                   leading: CircleAvatar(
+                                    radius: 28,
                                     backgroundColor: const Color(0xFF2A9D8F)
-                                        .withOpacity(0.2),
-                                    child: const Icon(Icons.face,
-                                        color: Color(0xFF2A9D8F)),
+                                        .withValues(alpha: 0.2),
+                                    child: const Icon(Icons.child_care,
+                                        color: Color(0xFF2A9D8F), size: 30),
                                   ),
                                   title: Text(
                                     child['full_name'] ?? 'Tanpa Nama',
                                     style: const TextStyle(
-                                        fontWeight: FontWeight.bold),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16),
                                   ),
-                                  subtitle: Text(
-                                      'Jenis Kelamin: ${child['gender']} | Lahir: ${child['birth_date']}'),
+                                  subtitle: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Usia: ${_calculateAge(child['birth_date'])}',
+                                        style: const TextStyle(
+                                            color: Color(0xFF2A9D8F),
+                                            fontWeight: FontWeight.w600),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                          'Jenis Kelamin: ${child['gender']} | Lahir: ${child['birth_date']}'),
+                                    ],
+                                  ),
                                   trailing: const Icon(Icons.arrow_forward_ios,
-                                      size: 16),
+                                      size: 16, color: Colors.grey),
                                   onTap: () {
                                     Navigator.push(
-                                       context,
-                                       MaterialPageRoute(
-                                       builder: (context) => ChildDetailScreen(childData: child),
-                                        ),
-                                 );
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            ChildDetailScreen(childData: child),
+                                      ),
+                                    );
                                   },
                                 ),
                               );

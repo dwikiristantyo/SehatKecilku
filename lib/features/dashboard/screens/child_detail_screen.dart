@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'child_immunization_screen.dart';
+import 'child_milestone_screen.dart';
+import 'child_reminder_screen.dart';
 
 class ChildDetailScreen extends StatefulWidget {
   final Map<String, dynamic> childData;
@@ -27,7 +31,7 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
           .from('growth_records')
           .select()
           .eq('child_id', widget.childData['id'])
-          .order('measurement_date', ascending: false);
+          .order('recorded_at', ascending: false);
 
       setState(() {
         _growthRecords = List<Map<String, dynamic>>.from(response);
@@ -95,13 +99,13 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
 
                 try {
                   await _supabase.from('growth_records').insert({
-                  'child_id': widget.childData['id'],
-                  'recorded_at': selectedDate.toIso8601String().split('T')[0], // atau sesuaikan nama kolom
-                  'weight_kg': double.parse(weightController.text),
-                  'height_cm': double.parse(heightController.text),
-                  'head_circumference_cm': headController.text.isNotEmpty 
-                  ? double.parse(headController.text) 
-                   : null,
+                    'child_id': widget.childData['id'],
+                    'recorded_at': selectedDate.toIso8601String().split('T')[0],
+                    'weight_kg': double.parse(weightController.text),
+                    'height_cm': double.parse(heightController.text),
+                    'head_circumference_cm': headController.text.isNotEmpty 
+                        ? double.parse(headController.text) 
+                        : null,
                   });
 
                   if (mounted) {
@@ -127,6 +131,80 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
     );
   }
 
+  // Widget untuk merender kurva grafik berat badan
+  Widget _buildWeightChart() {
+    if (_growthRecords.isEmpty) return const SizedBox.shrink();
+
+    // Urutkan dari terlama ke terbaru untuk grafik yang benar
+    final sortedRecords = List<Map<String, dynamic>>.from(_growthRecords)
+      ..sort((a, b) => (a['recorded_at'] ?? '').compareTo(b['recorded_at'] ?? ''));
+
+    List<FlSpot> spots = [];
+    for (int i = 0; i < sortedRecords.length; i++) {
+      final weight = (sortedRecords[i]['weight_kg'] as num?)?.toDouble() ?? 0.0;
+      spots.add(FlSpot(i.toDouble(), weight));
+    }
+
+    return Container(
+      height: 200,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withValues(alpha: 0.1),
+            spreadRadius: 2,
+            blurRadius: 5,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Kurva Berat Badan (kg)',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF264653)),
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: LineChart(
+              LineChartData(
+                gridData: const FlGridData(show: true, drawVerticalLine: false),
+                titlesData: const FlTitlesData(
+                  rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(showTitles: true, reservedSize: 30),
+                  ),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                ),
+                borderData: FlBorderData(show: false),
+                lineBarsData: [
+                  LineChartBarData(
+                    spots: spots,
+                    isCurved: true,
+                    color: const Color(0xFF2A9D8F),
+                    barWidth: 3,
+                    isStrokeCapRound: true,
+                    dotData: const FlDotData(show: true),
+                    belowBarData: BarAreaData(
+                      show: true,
+                      color: const Color(0xFF2A9D8F).withValues(alpha: 0.15),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final child = widget.childData;
@@ -142,7 +220,7 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header Info Anak
+            // Kartu Profil Anak
             Card(
               elevation: 2,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -152,7 +230,7 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
                   children: [
                     CircleAvatar(
                       radius: 30,
-                      backgroundColor: const Color(0xFF2A9D8F).withOpacity(0.2),
+                      backgroundColor: const Color(0xFF2A9D8F).withValues(alpha: 0.2),
                       child: const Icon(Icons.face, size: 36, color: Color(0xFF2A9D8F)),
                     ),
                     const SizedBox(width: 16),
@@ -174,7 +252,84 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
+
+            // Navigation Bar / Menu Kesehatan Anak (Imunisasi, Milestone, Jadwal)
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ChildImmunizationScreen(childData: widget.childData),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.vaccines, size: 16),
+                    label: const Text('Imunisasi'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF264653),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ChildMilestoneScreen(childData: widget.childData),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.emoji_events, size: 16),
+                    label: const Text('Milestone'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFE76F51),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ChildReminderScreen(childData: widget.childData),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.notifications_active, size: 16),
+                    label: const Text('Jadwal'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2A9D8F),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            // Tampilkan Grafik Berat Badan Jika Ada Data
+            if (_growthRecords.isNotEmpty) ...[
+              _buildWeightChart(),
+              const SizedBox(height: 20),
+            ],
+
+            // Header Riwayat Pertumbuhan
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -194,6 +349,8 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
               ],
             ),
             const SizedBox(height: 12),
+
+            // Daftar Riwayat Pertumbuhan
             Expanded(
               child: _isLoading
                   ? const Center(child: CircularProgressIndicator())
@@ -213,9 +370,9 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                               child: ListTile(
                                 leading: const Icon(Icons.monitor_weight, color: Color(0xFF2A9D8F)),
-                                title: Text('Tanggal: ${record['measurement_date']}'),
+                                title: Text('Tanggal: ${record['recorded_at']}'),
                                 subtitle: Text(
-                                  'Berat: ${record['weight_kg']} kg | Tinggi: ${record['height_cm']} cm',
+                                  'Berat: ${record['weight_kg']} kg | Tinggi: ${record['height_cm']} cm${record['head_circumference_cm'] != null ? ' | LK: ${record['head_circumference_cm']} cm' : ''}',
                                 ),
                               ),
                             );

@@ -1,15 +1,17 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/constants/supabase_config.dart';
 import 'features/auth/screens/login_screen.dart';
-import 'features/dashboard/screens/dashboard_screen.dart'; // Pastikan import ini ada
+import 'features/auth/screens/update_password_screen.dart';
+import 'features/dashboard/screens/dashboard_screen.dart';
+
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Inisialisasi Supabase menggunakan konstanta dari SupabaseConfig
   await Supabase.initialize(
     url: SupabaseConfig.url,
     anonKey: SupabaseConfig.anonKey,
@@ -24,41 +26,106 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'SehatKecilku',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF2A9D8F), // Primary Teal
+          seedColor: const Color(0xFF2A9D8F),
           primary: const Color(0xFF2A9D8F),
-          secondary: const Color(0xFFF4A261), // Soft Orange
+          secondary: const Color(0xFFF4A261),
           surface: const Color(0xFFF8F9FA),
         ),
         scaffoldBackgroundColor: const Color(0xFFF8F9FA),
-        // Tipografi utama Plus Jakarta Sans
-        //textTheme: GoogleFonts.plusJakartaSansTextTheme(
-          //ThemeData.light().textTheme,
-        //),
       ),
       home: const AuthGate(),
     );
   }
 }
 
-class AuthGate extends StatelessWidget {
+class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    // Memeriksa status sesi pengguna di Supabase
-    final session = Supabase.instance.client.auth.currentSession;
+  State<AuthGate> createState() => _AuthGateState();
+}
 
+class _AuthGateState extends State<AuthGate> {
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _processTokenHash();
+  }
+
+  Future<void> _processTokenHash() async {
+    try {
+      final Uri uri = Uri.base;
+      
+      String? tokenHash = uri.queryParameters['token_hash'];
+      String? type = uri.queryParameters['type'];
+
+      // Parsing fragment URL Flutter Web secara aman dan bersih
+      if ((tokenHash == null || tokenHash.isEmpty) && uri.hasFragment) {
+        String fragment = uri.fragment; // Contoh: "/?token_hash=abc&type=recovery"
+        
+        // Bersihkan leading slash (/) atau question mark (?) di awal fragment
+        while (fragment.startsWith('/') || fragment.startsWith('?')) {
+          fragment = fragment.substring(1);
+        }
+
+        final fragmentUri = Uri.parse('http://localhost?$fragment');
+        tokenHash = fragmentUri.queryParameters['token_hash'];
+        type = fragmentUri.queryParameters['type'];
+      }
+
+      // Jika token_hash ditemukan dan tipenya recovery, verifikasi OTP secara manual
+      if (tokenHash != null && tokenHash.isNotEmpty && type == 'recovery') {
+        final response = await Supabase.instance.client.auth.verifyOTP(
+          tokenHash: tokenHash,
+          type: OtpType.recovery,
+        );
+
+        if (response.session != null && mounted) {
+          // Berhasil diverifikasi, arahkan ke halaman UpdatePasswordScreen
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (context) => const UpdatePasswordScreen()),
+            (route) => false,
+          );
+          return;
+        }
+      }
+    } catch (e) {
+      debugPrint('Gagal memproses token hash: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(
+            color: Color(0xFF2A9D8F),
+          ),
+        ),
+      );
+    }
+
+    final session = Supabase.instance.client.auth.currentSession;
     if (session != null) {
-      // Langsung arahkan ke DashboardScreen yang sebenarnya jika sesi aktif
       return const DashboardScreen();
     }
 
-    // Arahkan ke LoginScreen jika belum ada sesi login
     return const LoginScreen();
   }
 }
