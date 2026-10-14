@@ -47,85 +47,152 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
     final weightController = TextEditingController();
     final heightController = TextEditingController();
     final headController = TextEditingController();
+    final placeController = TextEditingController();
+    final officerController = TextEditingController();
+    
+    // Default tanggal hari ini
     DateTime selectedDate = DateTime.now();
 
     showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Tambah Catatan Pertumbuhan'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: weightController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'Berat Badan (kg)'),
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Text('Tambah Catatan Pertumbuhan'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Pilihan Tanggal (Bisa Backdate)
+                    InkWell(
+                      onTap: () async {
+                        final DateTime? picked = await showDatePicker(
+                          context: context,
+                          initialDate: selectedDate,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime.now(),
+                        );
+                        if (picked != null) {
+                          setDialogState(() {
+                            selectedDate = picked;
+                          });
+                        }
+                      },
+                      child: InputDecorator(
+                        decoration: InputDecoration(
+                          labelText: 'Tanggal Pengukuran',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          prefixIcon: const Icon(Icons.calendar_today),
+                        ),
+                        child: Text(
+                          "${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}",
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: weightController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(
+                        labelText: 'Berat Badan (kg)',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: heightController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(
+                        labelText: 'Tinggi/Panjang Badan (cm)',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: headController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(
+                        labelText: 'Lingkar Kepala (cm - Opsional)',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: placeController,
+                      decoration: InputDecoration(
+                        labelText: 'Tempat (Puskesmas/Klinik/RS/Posyandu)',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: officerController,
+                      decoration: InputDecoration(
+                        labelText: 'Petugas In Charge (Dokter/Bidan/Petugas)',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: heightController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'Tinggi/Panjang Badan (cm)'),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Batal', style: TextStyle(color: Colors.grey)),
                 ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: headController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'Lingkar Kepala (cm - Opsional)'),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2A9D8F),
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: () async {
+                    if (weightController.text.isEmpty || heightController.text.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Berat dan Tinggi badan wajib diisi')),
+                      );
+                      return;
+                    }
+
+                    try {
+                      await _supabase.from('growth_records').insert({
+                        'child_id': widget.childData['id'],
+                        'recorded_at': "${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}",
+                        'weight_kg': double.parse(weightController.text),
+                        'height_cm': double.parse(heightController.text),
+                        'head_circumference_cm': headController.text.isNotEmpty 
+                            ? double.parse(headController.text) 
+                            : null,
+                        'healthcare_provider_name': placeController.text.trim().isNotEmpty 
+                            ? placeController.text.trim() 
+                            : null,
+                        'healthcare_provider_type': officerController.text.trim().isNotEmpty 
+                            ? officerController.text.trim() 
+                            : null,
+                      });
+
+                      if (mounted) {
+                        Navigator.pop(context);
+                        _loadGrowthRecords();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Catatan pertumbuhan berhasil ditambahkan!')),
+                        );
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Gagal menyimpan: $e')),
+                        );
+                      }
+                    }
+                  },
+                  child: const Text('Simpan'),
                 ),
               ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Batal', style: TextStyle(color: Colors.grey)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2A9D8F),
-                foregroundColor: Colors.white,
-              ),
-              onPressed: () async {
-                if (weightController.text.isEmpty || heightController.text.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Berat dan Tinggi badan wajib diisi')),
-                  );
-                  return;
-                }
-
-                try {
-                  await _supabase.from('growth_records').insert({
-                    'child_id': widget.childData['id'],
-                    'recorded_at': selectedDate.toIso8601String().split('T')[0],
-                    'weight_kg': double.parse(weightController.text),
-                    'height_cm': double.parse(heightController.text),
-                    'head_circumference_cm': headController.text.isNotEmpty 
-                        ? double.parse(headController.text) 
-                        : null,
-                  });
-
-                  if (mounted) {
-                    Navigator.pop(context);
-                    _loadGrowthRecords();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Catatan pertumbuhan berhasil ditambahkan!')),
-                    );
-                  }
-                } catch (e) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Gagal menyimpan: $e')),
-                    );
-                  }
-                }
-              },
-              child: const Text('Simpan'),
-            ),
-          ],
+            );
+          },
         );
       },
     );
@@ -365,14 +432,50 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
                           itemCount: _growthRecords.length,
                           itemBuilder: (context, index) {
                             final record = _growthRecords[index];
+                            final place = record['healthcare_provider_name'];
+                            final officer = record['healthcare_provider_type'];
+
                             return Card(
                               margin: const EdgeInsets.only(bottom: 10),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              child: ListTile(
-                                leading: const Icon(Icons.monitor_weight, color: Color(0xFF2A9D8F)),
-                                title: Text('Tanggal: ${record['recorded_at']}'),
-                                subtitle: Text(
-                                  'Berat: ${record['weight_kg']} kg | Tinggi: ${record['height_cm']} cm${record['head_circumference_cm'] != null ? ' | LK: ${record['head_circumference_cm']} cm' : ''}',
+                              child: Padding(
+                                padding: const EdgeInsets.all(12.0),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          'Tanggal: ${record['recorded_at']}',
+                                          style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF264653)),
+                                        ),
+                                        if (place != null && place.toString().isNotEmpty)
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFF2A9D8F).withValues(alpha: 0.1),
+                                              borderRadius: BorderRadius.circular(6),
+                                            ),
+                                            child: Text(
+                                              place,
+                                              style: const TextStyle(fontSize: 12, color: Color(0xFF2A9D8F), fontWeight: FontWeight.w500),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      'Berat: ${record['weight_kg']} kg | Tinggi: ${record['height_cm']} cm${record['head_circumference_cm'] != null ? ' | LK: ${record['head_circumference_cm']} cm' : ''}',
+                                    ),
+                                    if (officer != null && officer.toString().isNotEmpty) ...[
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Petugas: $officer',
+                                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                      ),
+                                    ],
+                                  ],
                                 ),
                               ),
                             );

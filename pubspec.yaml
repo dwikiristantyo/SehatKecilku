@@ -22,3 +22,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - lib/Gemini_Generated_Image_uxpr29uxpr29uxpr.jpeg

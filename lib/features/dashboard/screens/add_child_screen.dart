@@ -17,7 +17,7 @@ class _AddChildScreenState extends State<AddChildScreen> {
   final _birthLengthController = TextEditingController();
   final _headCircumferenceController = TextEditingController();
 
-  String _selectedGender = 'Laki-laki';
+  String _selectedGender = 'male';
   DateTime? _selectedBirthDate;
   bool _isLoading = false;
 
@@ -124,7 +124,7 @@ class _AddChildScreenState extends State<AddChildScreen> {
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                value: _selectedGender,
+                initialValue: _selectedGender,
                 decoration: InputDecoration(
                   labelText: 'Jenis Kelamin',
                   prefixIcon: const Icon(Icons.wc),
@@ -132,12 +132,10 @@ class _AddChildScreenState extends State<AddChildScreen> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                items: ['Laki-laki', 'Perempuan']
-                    .map((gender) => DropdownMenuItem(
-                          value: gender,
-                          child: Text(gender),
-                        ))
-                    .toList(),
+                items: const [
+                  DropdownMenuItem(value: 'male', child: Text('Laki-laki')),
+                  DropdownMenuItem(value: 'female', child: Text('Perempuan')),
+                ],
                 onChanged: (value) {
                   setState(() => _selectedGender = value!);
                 },

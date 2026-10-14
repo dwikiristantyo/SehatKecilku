@@ -172,7 +172,7 @@ class _ChildImmunizationScreenState extends State<ChildImmunizationScreen> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       child: ListTile(
                         leading: CircleAvatar(
-                          backgroundColor: isCompleted ? Colors.green.withOpacity(0.2) : Colors.orange.withOpacity(0.2),
+                          backgroundColor: isCompleted ? Colors.green.withValues(alpha: 0.2) : Colors.orange.withValues(alpha: 0.2),
                           child: Icon(
                             isCompleted ? Icons.check : Icons.access_time,
                             color: isCompleted ? Colors.green : Colors.orange,

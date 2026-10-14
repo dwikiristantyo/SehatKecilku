@@ -67,11 +67,8 @@ class _AuthGateState extends State<AuthGate> {
       String? tokenHash = uri.queryParameters['token_hash'];
       String? type = uri.queryParameters['type'];
 
-      // Parsing fragment URL Flutter Web secara aman dan bersih
       if ((tokenHash == null || tokenHash.isEmpty) && uri.hasFragment) {
-        String fragment = uri.fragment; // Contoh: "/?token_hash=abc&type=recovery"
-        
-        // Bersihkan leading slash (/) atau question mark (?) di awal fragment
+        String fragment = uri.fragment;
         while (fragment.startsWith('/') || fragment.startsWith('?')) {
           fragment = fragment.substring(1);
         }
@@ -81,7 +78,6 @@ class _AuthGateState extends State<AuthGate> {
         type = fragmentUri.queryParameters['type'];
       }
 
-      // Jika token_hash ditemukan dan tipenya recovery, verifikasi OTP secara manual
       if (tokenHash != null && tokenHash.isNotEmpty && type == 'recovery') {
         final response = await Supabase.instance.client.auth.verifyOTP(
           tokenHash: tokenHash,
@@ -89,7 +85,6 @@ class _AuthGateState extends State<AuthGate> {
         );
 
         if (response.session != null && mounted) {
-          // Berhasil diverifikasi, arahkan ke halaman UpdatePasswordScreen
           Navigator.pushAndRemoveUntil(
             context,
             MaterialPageRoute(builder: (context) => const UpdatePasswordScreen()),
