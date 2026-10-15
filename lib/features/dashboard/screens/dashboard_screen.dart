@@ -9,6 +9,8 @@ import 'child_reminder_screen.dart';
 import '../../../screen/maternal/maternal_pregnancy_screen.dart';
 import 'profile_screen.dart';
 import 'growth_standards_chart.dart';
+import '../child_display.dart';
+import 'health_articles_section.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -102,9 +104,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (context) => const ProfileScreen(),
-                ),
+                MaterialPageRoute(builder: (context) => const ProfileScreen()),
               );
             },
             icon: const Icon(Icons.account_circle_outlined),
@@ -119,102 +119,93 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _loadError != null
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text('Gagal memuat data anak.'),
-                    const SizedBox(height: 12),
-                    ElevatedButton(
-                      onPressed: _loadChildren,
-                      child: const Text('Coba lagi'),
-                    ),
-                  ],
-                ),
-              ),
-            )
-          : _children.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('Belum ada data anak.'),
-                  const SizedBox(height: 12),
-                  ElevatedButton.icon(
-                    onPressed: _addChild,
-                    icon: const Icon(Icons.add),
-                    label: const Text('Tambah Anak'),
-                  ),
-                ],
-              ),
-            )
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                const Text(
-                  'Daftar Anak',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 12),
-                ..._children.map((child) {
-                  final gender = (child['gender'] ?? '')
-                      .toString()
-                      .trim()
-                      .toLowerCase();
-                  final isGirl = gender == 'female' || gender == 'perempuan';
-                  final isBoy = gender == 'male' || gender == 'laki-laki';
-                  final genderColor = isGirl
-                      ? const Color(0xFFD65A83)
-                      : isBoy
-                      ? const Color(0xFF3978B8)
-                      : const Color(0xFF2A9D8F);
-                  final rowColor = isGirl
-                      ? const Color(0xFFFFE8EF)
-                      : isBoy
-                      ? const Color(0xFFE7F2FC)
-                      : Colors.white;
-                  final childIcon = isGirl
-                      ? Icons.girl
-                      : isBoy
-                      ? Icons.boy
-                      : Icons.child_care;
-
-                  return Card(
-                    color: rowColor,
-                    child: ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: genderColor.withValues(alpha: 0.14),
-                        child: Icon(childIcon, color: genderColor),
-                      ),
-                      title: Text(
-                        child['full_name']?.toString() ?? 'Nama tidak tersedia',
-                      ),
-                      subtitle: Text(
-                        child['birth_date']?.toString() ??
-                            'Tanggal lahir tidak tersedia',
-                      ),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) =>
-                                ChildDetailScreen(childData: child),
-                          ),
-                        );
-                      },
+                if (_loadError != null) ...[
+                  const Text('Gagal memuat data anak.'),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: ElevatedButton(
+                      onPressed: _loadChildren,
+                      child: const Text('Coba lagi'),
                     ),
-                  );
-                }),
-                const SizedBox(height: 8),
-                OutlinedButton.icon(
-                  onPressed: _addChild,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Tambah Anak'),
-                ),
+                  ),
+                ] else if (_children.isEmpty) ...[
+                  const Text(
+                    'Daftar Anak',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text('Belum ada data anak.'),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: ElevatedButton.icon(
+                      onPressed: _addChild,
+                      icon: const Icon(Icons.add),
+                      label: const Text('Tambah Anak'),
+                    ),
+                  ),
+                ] else ...[
+                  const Text(
+                    'Daftar Anak',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+                  ..._children.map((child) {
+                    final style = childDisplayStyle(child['gender']);
+                    final birthDate = child['birth_date'];
+
+                    return Card(
+                      color: style.backgroundColor,
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: style.accentColor.withValues(
+                            alpha: 0.14,
+                          ),
+                          child: Icon(style.icon, color: style.accentColor),
+                        ),
+                        title: Text(
+                          child['full_name']?.toString() ??
+                              'Nama tidak tersedia',
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Tanggal lahir: ${formatChildBirthDate(birthDate)}',
+                            ),
+                            Text(formatChildAge(birthDate)),
+                          ],
+                        ),
+                        isThreeLine: true,
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  ChildDetailScreen(childData: child),
+                            ),
+                          );
+                        },
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: OutlinedButton.icon(
+                      onPressed: _addChild,
+                      icon: const Icon(Icons.add),
+                      label: const Text('Tambah Anak'),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 24),
+                const HealthArticlesSection(),
               ],
             ),
     );
@@ -491,6 +482,8 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final child = widget.childData;
+    final style = childDisplayStyle(child['gender']);
+    final birthDate = child['birth_date'];
 
     return Scaffold(
       appBar: AppBar(
@@ -506,6 +499,7 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
           children: [
             // Kartu Profil Anak
             Card(
+              color: style.backgroundColor,
               elevation: 2,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
@@ -516,12 +510,13 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
                   children: [
                     CircleAvatar(
                       radius: 30,
-                      backgroundColor: const Color(0xFF2A9D8F)
-                          .withValues(alpha: 0.2),
-                      child: const Icon(
-                        Icons.face,
+                      backgroundColor: style.accentColor.withValues(
+                        alpha: 0.14,
+                      ),
+                      child: Icon(
+                        style.icon,
                         size: 36,
-                        color: Color(0xFF2A9D8F),
+                        color: style.accentColor,
                       ),
                     ),
                     const SizedBox(width: 16),
@@ -537,8 +532,11 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
                             ),
                           ),
                           const SizedBox(height: 4),
-                          Text('Jenis Kelamin: ${child['gender']}'),
-                          Text('Tanggal Lahir: ${child['birth_date']}'),
+                          Text('Jenis Kelamin: ${style.genderLabel}'),
+                          Text(
+                            'Tanggal Lahir: ${formatChildBirthDate(birthDate)}',
+                          ),
+                          Text(formatChildAge(birthDate)),
                         ],
                       ),
                     ),

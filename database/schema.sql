@@ -16,7 +16,9 @@ CREATE TABLE public.children (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   parent_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   full_name TEXT NOT NULL,
-  gender VARCHAR(10) CHECK (gender IN ('male', 'female')),
+  gender VARCHAR(10) CHECK (
+    gender IN ('male', 'female', 'laki-laki', 'perempuan', 'Laki-laki', 'Perempuan')
+  ),
   birth_date DATE NOT NULL,
   birth_weight_kg NUMERIC(4,2),
   birth_length_cm NUMERIC(4,2),
