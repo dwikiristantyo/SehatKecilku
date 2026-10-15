@@ -5,6 +5,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'child_immunization_screen.dart';
 import 'child_milestone_screen.dart';
 import 'child_reminder_screen.dart';
+import 'child_illness_screen.dart';
 import '../child_display.dart';
 
 class ChildDetailScreen extends StatefulWidget {
@@ -463,6 +464,24 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
             const SizedBox(height: 20),
 
             // Tampilkan Grafik Berat Badan Jika Ada Data
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ChildIllnessScreen(
+                        childId: widget.childData['id'].toString(),
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.medical_services_outlined),
+                label: const Text('Riwayat Sakit'),
+              ),
+            ),
+            const SizedBox(height: 20),
             if (_growthRecords.isNotEmpty) ...[
               _buildWeightChart(),
               const SizedBox(height: 20),

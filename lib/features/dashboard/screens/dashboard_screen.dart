@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:geolocator/geolocator.dart';
 
 import '../../auth/screens/login_screen.dart';
 import 'add_child_screen.dart';
 import 'child_immunization_screen.dart';
 import 'child_milestone_screen.dart';
 import 'child_reminder_screen.dart';
+import 'child_illness_screen.dart';
 import '../../../screen/maternal/maternal_pregnancy_screen.dart';
 import 'profile_screen.dart';
 import 'growth_standards_chart.dart';
@@ -88,6 +90,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         backgroundColor: const Color(0xFF2A9D8F),
         foregroundColor: Colors.white,
         actions: [
+          // Tombol di AppBar hanya menyisakan Kehamilan, Profil, dan Logout
           IconButton(
             onPressed: () {
               Navigator.push(
@@ -205,7 +208,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ],
                 const SizedBox(height: 24),
+                // Bagian Artikel Kesehatan
                 const HealthArticlesSection(),
+                const SizedBox(height: 16),
+
+                // TOMBOL FASKES & RSIA TERDEKAT (DILETAKKAN DI BAWAH ARTIKEL)
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const NearbyFaskesScreen(),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.local_hospital_outlined),
+                    label: const Text('Cari Faskes & RSIA Terdekat'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2A9D8F),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 2,
+                    ),
+                  ),
+                ),
               ],
             ),
     );
@@ -626,6 +657,24 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
             const SizedBox(height: 20),
 
             // Tampilkan Grafik Berat Badan Jika Ada Data
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ChildIllnessScreen(
+                        childId: widget.childData['id'].toString(),
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.medical_services_outlined),
+                label: const Text('Riwayat Sakit'),
+              ),
+            ),
+            const SizedBox(height: 20),
             _buildWeightChart(),
             const SizedBox(height: 20),
 
@@ -764,6 +813,218 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
                   ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ==========================================
+// MODUL TAMBAHAN: FASKES & RSIA TERDEKAT (GPS)
+// ==========================================
+
+class NearbyFaskesScreen extends StatefulWidget {
+  const NearbyFaskesScreen({Key? key}) : super(key: key);
+
+  @override
+  _NearbyFaskesScreenState createState() => _NearbyFaskesScreenState();
+}
+
+class _NearbyFaskesScreenState extends State<NearbyFaskesScreen> {
+  bool _isLoading = true;
+  String _locationMessage = "Mendeteksi lokasi GPS Anda...";
+  Position? _currentPosition;
+
+  // Daftar Mock Faskes / RSIA terdekat
+  final List<Map<String, dynamic>> _faskesList = [
+    {
+      "name": "RSUD Kebayoran Baru",
+      "address": "Jl. Abdul Majid Raya No.28, Cipete Utara, Jakarta Selatan",
+      "distance": "900 m",
+      "phone": "+62 21 22774429",
+      "status": "Buka 24 Jam",
+    },
+    {
+      "name": "Brawijaya Hospital Antasari",
+      "address": "Jl. Taman Brawijaya No.1, Cipete Utara, Jakarta Selatan",
+      "distance": "1.6 km",
+      "phone": "+62 150160",
+      "status": "Buka 24 Jam",
+    },
+    {
+      "name": "Rumah Sakit Ibu dan Anak Brawijaya",
+      "address": "Jl. Taman Brawijaya No.1, Cipete Utara, Jakarta Selatan",
+      "distance": "1.7 km",
+      "phone": "+62 150160",
+      "status": "Buka 24 Jam",
+    },
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _determinePosition();
+  }
+
+  Future<void> _determinePosition() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      setState(() {
+        _isLoading = false;
+        _locationMessage = "Layanan GPS/Lokasi tidak aktif pada perangkat.";
+      });
+      return;
+    }
+
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        setState(() {
+          _isLoading = false;
+          _locationMessage = "Izin akses lokasi ditolak oleh pengguna.";
+        });
+        return;
+      }
+    }
+    
+    if (permission == LocationPermission.deniedForever) {
+      setState(() {
+        _isLoading = false;
+        _locationMessage = "Izin lokasi ditolak permanen. Ubah di pengaturan perangkat.";
+      });
+      return;
+    }
+
+    try {
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+      setState(() {
+        _currentPosition = position;
+        _isLoading = false;
+        _locationMessage = "Lokasi terdeteksi: ${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)}";
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _locationMessage = "Gagal Mendapatkan Koordinat GPS: $e";
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Faskes & RSIA Terdekat'),
+        backgroundColor: const Color(0xFF2A9D8F),
+        foregroundColor: Colors.white,
+      ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: double.infinity,
+            color: Colors.teal.shade50,
+            padding: const EdgeInsets.all(12.0),
+            child: Row(
+              children: [
+                const Icon(Icons.location_on, color: Color(0xFF2A9D8F)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _locationMessage,
+                    style: TextStyle(fontSize: 13, color: Colors.teal.shade900),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Text(
+              'Daftar Rumah Sakit & Puskesmas Rujukan:',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF264653)),
+            ),
+          ),
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : ListView.builder(
+                    itemCount: _faskesList.length,
+                    itemBuilder: (context, index) {
+                      final faskes = _faskesList[index];
+                      return Card(
+                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      faskes['name'],
+                                      style: const TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF264653),
+                                      ),
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.green.shade50,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      faskes['distance'],
+                                      style: TextStyle(fontSize: 12, color: Colors.green.shade700, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                faskes['address'],
+                                style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
+                              ),
+                              const SizedBox(height: 8),
+                              const Divider(),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  const Icon(Icons.phone_outlined, size: 14, color: Colors.grey),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'Kontak Info: ${faskes['phone']}',
+                                    style: TextStyle(fontSize: 12, color: Colors.grey.shade800),
+                                  ),
+                                  const Spacer(),
+                                  Text(
+                                    faskes['status'],
+                                    style: const TextStyle(fontSize: 12, color: Colors.blueGrey, fontStyle: FontStyle.italic),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
       ),
     );
   }
