@@ -1,5 +1,8 @@
 import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/constants/supabase_config.dart';
@@ -63,7 +66,7 @@ class _AuthGateState extends State<AuthGate> {
   Future<void> _processTokenHash() async {
     try {
       final Uri uri = Uri.base;
-      
+
       String? tokenHash = uri.queryParameters['token_hash'];
       String? type = uri.queryParameters['type'];
 
@@ -87,7 +90,9 @@ class _AuthGateState extends State<AuthGate> {
         if (response.session != null && mounted) {
           Navigator.pushAndRemoveUntil(
             context,
-            MaterialPageRoute(builder: (context) => const UpdatePasswordScreen()),
+            MaterialPageRoute(
+              builder: (context) => const UpdatePasswordScreen(),
+            ),
             (route) => false,
           );
           return;
@@ -100,7 +105,55 @@ class _AuthGateState extends State<AuthGate> {
         setState(() {
           _isLoading = false;
         });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _requestLocationPermission();
+        });
       }
+    }
+  }
+
+  Future<void> _requestLocationPermission() async {
+    if (kIsWeb ||
+        !{
+          TargetPlatform.android,
+          TargetPlatform.iOS,
+        }.contains(defaultTargetPlatform)) {
+      return;
+    }
+
+    try {
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission != LocationPermission.deniedForever || !mounted) return;
+
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Izin lokasi belum aktif'),
+          content: const Text(
+            'Aktifkan izin lokasi di pengaturan perangkat untuk menemukan '
+            'fasilitas kesehatan terdekat.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Nanti'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                Navigator.pop(dialogContext);
+                await Geolocator.openAppSettings();
+              },
+              child: const Text('Buka Pengaturan'),
+            ),
+          ],
+        ),
+      );
+    } catch (error) {
+      debugPrint('Gagal memeriksa izin lokasi: $error');
     }
   }
 
@@ -109,9 +162,7 @@ class _AuthGateState extends State<AuthGate> {
     if (_isLoading) {
       return const Scaffold(
         body: Center(
-          child: CircularProgressIndicator(
-            color: Color(0xFF2A9D8F),
-          ),
+          child: CircularProgressIndicator(color: Color(0xFF2A9D8F)),
         ),
       );
     }

@@ -20,6 +20,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _relationship = 'mother';
   bool _isLoading = true;
   bool _isSaving = false;
+  bool _isDeleting = false;
   String? _loadError;
 
   @override
@@ -112,6 +113,138 @@ class _ProfileScreenState extends State<ProfileScreen> {
       MaterialPageRoute(builder: (context) => const LoginScreen()),
       (route) => false,
     );
+  }
+
+  Future<void> _deleteAccount() async {
+    final user = _supabase.auth.currentUser;
+    if (user?.email == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sesi akun tidak ditemukan.')),
+      );
+      return;
+    }
+
+    final passwordController = TextEditingController();
+    final password = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Verifikasi 1 dari 2'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Masukkan password akun untuk memverifikasi identitas.'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: passwordController,
+              obscureText: true,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Password',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final value = passwordController.text;
+              if (value.isNotEmpty) Navigator.pop(dialogContext, value);
+            },
+            child: const Text('Verifikasi'),
+          ),
+        ],
+      ),
+    );
+    passwordController.dispose();
+    if (password == null) return;
+
+    try {
+      await _supabase.auth.signInWithPassword(
+        email: user!.email!,
+        password: password,
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Verifikasi password gagal: $error')),
+      );
+      return;
+    }
+
+    if (!mounted) return;
+    final confirmationController = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Verifikasi 2 dari 2'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Akun dan seluruh data anak terkait akan dihapus permanen. '
+                'Tindakan ini tidak dapat dibatalkan. Ketik HAPUS untuk melanjutkan.',
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: confirmationController,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: 'Ketik HAPUS',
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: (_) => setDialogState(() {}),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Batal'),
+            ),
+            FilledButton(
+              onPressed: confirmationController.text.trim() == 'HAPUS'
+                  ? () => Navigator.pop(dialogContext, true)
+                  : null,
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Hapus Akun'),
+            ),
+          ],
+        ),
+      ),
+    );
+    confirmationController.dispose();
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isDeleting = true);
+    try {
+      await _supabase.rpc('delete_own_account');
+      await _supabase.auth.signOut(scope: SignOutScope.local);
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        (route) => false,
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Gagal menghapus akun: $error')));
+    } finally {
+      if (mounted) setState(() => _isDeleting = false);
+    }
   }
 
   @override
@@ -228,12 +361,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     const SizedBox(height: 12),
                     OutlinedButton.icon(
-                      onPressed: _handleLogout,
+                      onPressed: _isDeleting ? null : _handleLogout,
                       icon: const Icon(Icons.logout),
                       label: const Text('Keluar Akun'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.red,
                       ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextButton.icon(
+                      onPressed: _isDeleting ? null : _deleteAccount,
+                      icon: _isDeleting
+                          ? const SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.delete_forever_outlined),
+                      label: Text(
+                        _isDeleting ? 'Menghapus akun...' : 'Hapus Akun',
+                      ),
+                      style: TextButton.styleFrom(foregroundColor: Colors.red),
                     ),
                   ],
                 ),

@@ -823,7 +823,7 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
 // ==========================================
 
 class NearbyFaskesScreen extends StatefulWidget {
-  const NearbyFaskesScreen({Key? key}) : super(key: key);
+  const NearbyFaskesScreen({super.key});
 
   @override
   _NearbyFaskesScreenState createState() => _NearbyFaskesScreenState();
