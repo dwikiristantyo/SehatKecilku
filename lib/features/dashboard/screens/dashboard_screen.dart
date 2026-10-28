@@ -13,6 +13,7 @@ import 'profile_screen.dart';
 import 'growth_standards_chart.dart';
 import '../child_display.dart';
 import 'health_articles_section.dart';
+import '../../../services/faskes_search_service.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -831,33 +832,13 @@ class NearbyFaskesScreen extends StatefulWidget {
 
 class _NearbyFaskesScreenState extends State<NearbyFaskesScreen> {
   bool _isLoading = true;
+  bool _hasLocation = false;
   String _locationMessage = "Mendeteksi lokasi GPS Anda...";
-  Position? _currentPosition;
-
-  // Daftar Mock Faskes / RSIA terdekat
-  final List<Map<String, dynamic>> _faskesList = [
-    {
-      "name": "RSUD Kebayoran Baru",
-      "address": "Jl. Abdul Majid Raya No.28, Cipete Utara, Jakarta Selatan",
-      "distance": "900 m",
-      "phone": "+62 21 22774429",
-      "status": "Buka 24 Jam",
-    },
-    {
-      "name": "Brawijaya Hospital Antasari",
-      "address": "Jl. Taman Brawijaya No.1, Cipete Utara, Jakarta Selatan",
-      "distance": "1.6 km",
-      "phone": "+62 150160",
-      "status": "Buka 24 Jam",
-    },
-    {
-      "name": "Rumah Sakit Ibu dan Anak Brawijaya",
-      "address": "Jl. Taman Brawijaya No.1, Cipete Utara, Jakarta Selatan",
-      "distance": "1.7 km",
-      "phone": "+62 150160",
-      "status": "Buka 24 Jam",
-    },
-  ];
+  bool _needsLocationSettings = false;
+  bool _needsAppSettings = false;
+  String? _searchError;
+  List<FaskesLocation> _faskes = [];
+  final _faskesSearchService = FaskesSearchService();
 
   @override
   void initState() {
@@ -866,51 +847,85 @@ class _NearbyFaskesScreenState extends State<NearbyFaskesScreen> {
   }
 
   Future<void> _determinePosition() async {
-    bool serviceEnabled;
-    LocationPermission permission;
-
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      setState(() {
-        _isLoading = false;
-        _locationMessage = "Layanan GPS/Lokasi tidak aktif pada perangkat.";
-      });
-      return;
-    }
-
-    permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
+    setState(() {
+      _isLoading = true;
+      _hasLocation = false;
+      _needsLocationSettings = false;
+      _needsAppSettings = false;
+      _searchError = null;
+      _faskes = [];
+      _locationMessage = "Mendeteksi lokasi GPS Anda...";
+    });
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (!mounted) return;
         setState(() {
           _isLoading = false;
-          _locationMessage = "Izin akses lokasi ditolak oleh pengguna.";
+          _needsLocationSettings = true;
+          _locationMessage = "GPS tidak aktif. Aktifkan GPS, lalu coba lagi.";
         });
         return;
       }
-    }
-    
-    if (permission == LocationPermission.deniedForever) {
-      setState(() {
-        _isLoading = false;
-        _locationMessage = "Izin lokasi ditolak permanen. Ubah di pengaturan perangkat.";
-      });
-      return;
-    }
 
-    try {
-      Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied) {
+        if (!mounted) return;
+        setState(() {
+          _isLoading = false;
+          _locationMessage =
+              "Lokasi tidak terbaca karena izin lokasi aplikasi ditolak.";
+        });
+        return;
+      }
+      if (permission == LocationPermission.deniedForever) {
+        if (!mounted) return;
+        setState(() {
+          _isLoading = false;
+          _needsAppSettings = true;
+          _locationMessage = "Lokasi tidak terbaca. Izinkan akses lokasi aplikasi melalui pengaturan.";
+        });
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 20),
+        ),
       );
+      if (!mounted) return;
       setState(() {
-        _currentPosition = position;
-        _isLoading = false;
-        _locationMessage = "Lokasi terdeteksi: ${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)}";
+        _hasLocation = true;
+        _locationMessage =
+            "Lokasi terdeteksi: ${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)}";
       });
+
+      try {
+        final faskes = await _faskesSearchService.findNearby(
+          latitude: position.latitude,
+          longitude: position.longitude,
+        );
+        if (!mounted) return;
+        setState(() {
+          _faskes = faskes;
+          _isLoading = false;
+        });
+      } catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _isLoading = false;
+          _searchError = 'Data faskes gagal dimuat. Periksa koneksi internet, lalu coba lagi.';
+        });
+      }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
-        _locationMessage = "Gagal Mendapatkan Koordinat GPS: $e";
+        _locationMessage = "Lokasi tidak terbaca. Pastikan GPS aktif dan izin lokasi aplikasi diberikan, lalu coba lagi.";
       });
     }
   }
@@ -940,84 +955,99 @@ class _NearbyFaskesScreenState extends State<NearbyFaskesScreen> {
                     style: TextStyle(fontSize: 13, color: Colors.teal.shade900),
                   ),
                 ),
+                if (!_isLoading) ...[
+                  IconButton(
+                    tooltip: 'Coba deteksi lokasi lagi',
+                    onPressed: _determinePosition,
+                    icon: const Icon(Icons.refresh),
+                  ),
+                  if (_needsLocationSettings || _needsAppSettings)
+                    IconButton(
+                      tooltip: _needsLocationSettings
+                          ? 'Aktifkan GPS'
+                          : 'Buka pengaturan izin lokasi',
+                      onPressed: () => _needsLocationSettings
+                          ? Geolocator.openLocationSettings()
+                          : Geolocator.openAppSettings(),
+                      icon: const Icon(Icons.settings),
+                    ),
+                ],
               ],
-            ),
-          ),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Text(
-              'Daftar Rumah Sakit & Puskesmas Rujukan:',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF264653)),
             ),
           ),
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : ListView.builder(
-                    itemCount: _faskesList.length,
-                    itemBuilder: (context, index) {
-                      final faskes = _faskesList[index];
-                      return Card(
-                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                        elevation: 2,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                : _searchError != null
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                        _searchError!,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          color: Color(0xFF264653),
                         ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(12.0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      faskes['name'],
-                                      style: const TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.bold,
-                                        color: Color(0xFF264653),
-                                      ),
-                                    ),
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: Colors.green.shade50,
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                      faskes['distance'],
-                                      style: TextStyle(fontSize: 12, color: Colors.green.shade700, fontWeight: FontWeight.bold),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                faskes['address'],
-                                style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
-                              ),
-                              const SizedBox(height: 8),
-                              const Divider(),
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  const Icon(Icons.phone_outlined, size: 14, color: Colors.grey),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    'Kontak Info: ${faskes['phone']}',
-                                    style: TextStyle(fontSize: 12, color: Colors.grey.shade800),
-                                  ),
-                                  const Spacer(),
-                                  Text(
-                                    faskes['status'],
-                                    style: const TextStyle(fontSize: 12, color: Colors.blueGrey, fontStyle: FontStyle.italic),
-                                  ),
-                                ],
-                              ),
-                            ],
+                      ),
+                    ),
+                  )
+                : !_hasLocation || _faskes.isEmpty
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                        !_hasLocation
+                            ? 'Lokasi tidak terbaca. Pastikan GPS aktif dan izin lokasi aplikasi diberikan.'
+                            : 'Jarak Faskes terdekat tidak ditemukan dalam radius 60 km.',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          color: Color(0xFF264653),
+                        ),
+                      ),
+                    ),
+                  )
+                : ListView.builder(
+                    itemCount: _faskes.length + 1,
+                    itemBuilder: (context, index) {
+                      if (index == 0) {
+                        return Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                          child: Text(
+                            '${_faskes.length} faskes ditemukan dalam radius 60 km',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF264653),
+                            ),
+                          ),
+                        );
+                      }
+
+                      final faskes = _faskes[index - 1];
+                      final distance = faskes.distanceMeters < 1000
+                          ? '${faskes.distanceMeters.round()} m'
+                          : '${(faskes.distanceMeters / 1000).toStringAsFixed(1)} km';
+                      return Card(
+                        margin: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 6,
+                        ),
+                        child: ListTile(
+                          leading: const Icon(
+                            Icons.local_hospital_outlined,
+                            color: Color(0xFF2A9D8F),
+                          ),
+                          title: Text(faskes.name),
+                          subtitle: Text(
+                            faskes.address.isEmpty
+                                ? faskes.category
+                                : '${faskes.category} · ${faskes.address}',
+                          ),
+                          trailing: Text(
+                            distance,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                         ),
                       );
